@@ -83,12 +83,11 @@ const Index = () => {
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
         {/* Hero */}
         <header className="mb-12 text-center">
-          <div className="mb-4 flex items-center justify-center gap-2">
-            <Headphones className="h-8 w-8 text-primary" />
-            <Languages className="h-8 w-8 text-primary" />
+          <div className="mb-4 flex items-center justify-center">
+            <img src="/owl-favicon.png" alt="Devowl logo" className="h-14 w-14" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Audio Transcription & Translation
+            Devowl Transcriptor
           </h1>
           <p className="mt-3 text-muted-foreground">
             Upload any audio file — get an accurate transcription and English translation in seconds.
