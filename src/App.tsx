@@ -11,7 +11,7 @@ import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyOTP from "./pages/VerifyOTP";
-import VerifySignup from "./pages/VerifySignup";
+
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,7 +30,7 @@ const App = () => (
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-otp" element={<VerifyOTP />} />
-            <Route path="/verify-signup" element={<VerifySignup />} />
+            
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
