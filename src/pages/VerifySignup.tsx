@@ -18,35 +18,42 @@ const VerifySignup = () => {
     e.preventDefault();
     setLoading(true);
 
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: "signup",
-    });
+    try {
+      const res = await supabase.functions.invoke("verify-otp", {
+        body: { email, code: otp },
+      });
 
-    setLoading(false);
+      if (res.error) throw new Error(res.error.message);
 
-    if (error) {
-      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
-      return;
+      const data = res.data as { error?: string; verified?: boolean };
+      if (data?.error) throw new Error(data.error);
+
+      if (data?.verified) {
+        toast({ title: "Account verified!", description: "Welcome to Devowl Transcriptor. Please log in." });
+        navigate("/login");
+      }
+    } catch (err: any) {
+      toast({ title: "Verification failed", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-
-    toast({ title: "Account verified!", description: "Welcome to Devowl Transcriptor." });
-    navigate("/");
   };
 
   const handleResend = async () => {
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email,
-    });
+    try {
+      const res = await supabase.functions.invoke("send-otp", {
+        body: { email },
+      });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      return;
+      if (res.error) throw new Error(res.error.message);
+
+      const data = res.data as { error?: string };
+      if (data?.error) throw new Error(data.error);
+
+      toast({ title: "Code resent", description: `Check your email at ${email}` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
-
-    toast({ title: "Code resent", description: `Check your email at ${email}` });
   };
 
   if (!email) {

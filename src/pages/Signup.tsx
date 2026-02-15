@@ -21,6 +21,7 @@ const Signup = () => {
     e.preventDefault();
     setLoading(true);
 
+    // 1. Create user (auto-confirmed)
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -30,16 +31,33 @@ const Signup = () => {
       },
     });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       toast({ title: "Signup failed", description: error.message, variant: "destructive" });
       return;
     }
 
+    // 2. Send custom OTP via edge function
+    try {
+      const res = await supabase.functions.invoke("send-otp", {
+        body: { email },
+      });
+
+      if (res.error) throw new Error(res.error.message);
+      
+      const data = res.data as { error?: string };
+      if (data?.error) throw new Error(data.error);
+    } catch (err: any) {
+      setLoading(false);
+      toast({ title: "Could not send code", description: err.message, variant: "destructive" });
+      return;
+    }
+
+    setLoading(false);
+    // Sign out so user can't access app until verified
+    await supabase.auth.signOut();
     navigate(`/verify-signup?email=${encodeURIComponent(email)}`);
   };
-
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
