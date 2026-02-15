@@ -2,13 +2,14 @@ import { useState, useCallback, useEffect } from "react";
 import { AudioUploadZone } from "@/components/AudioUploadZone";
 import { ProcessingStatus, type ProcessingStep } from "@/components/ProcessingStatus";
 import { ResultsPane } from "@/components/ResultsPane";
-import { TranscriptionHistory } from "@/components/TranscriptionHistory";
+import { HistorySidebar } from "@/components/HistorySidebar";
 import { fileToBase64 } from "@/lib/audio-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 interface TranscriptionRecord {
   id: string;
@@ -29,6 +30,7 @@ const Index = () => {
   const [isEnglish, setIsEnglish] = useState(false);
   const [fileName, setFileName] = useState("");
   const [history, setHistory] = useState<TranscriptionRecord[]>([]);
+  const [activeHistoryId, setActiveHistoryId] = useState<string>();
   const { toast } = useToast();
   const { signOut, user } = useAuth();
 
@@ -37,7 +39,7 @@ const Index = () => {
       .from("transcriptions")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(50);
     if (data) setHistory(data as TranscriptionRecord[]);
   }, []);
 
@@ -53,6 +55,7 @@ const Index = () => {
     setDetectedLanguage("");
     setIsEnglish(false);
     setFileName(file.name);
+    setActiveHistoryId(undefined);
 
     try {
       const audioBase64 = await fileToBase64(file);
@@ -93,7 +96,6 @@ const Index = () => {
       setIsEnglish(sourceIsEnglish);
       setStep("done");
 
-      // Save to history
       await supabase.from("transcriptions").insert({
         user_id: user?.id,
         file_name: file.name,
@@ -121,76 +123,100 @@ const Index = () => {
     setDetectedLanguage(record.detected_language || "Unknown");
     setIsEnglish(record.is_english);
     setFileName(record.file_name);
+    setActiveHistoryId(record.id);
     setStep("done");
   }, []);
 
   const handleDeleteHistory = useCallback(async (id: string) => {
     await supabase.from("transcriptions").delete().eq("id", id);
+    if (activeHistoryId === id) {
+      setStep("idle");
+      setTranscription("");
+      setTranslation("");
+      setActiveHistoryId(undefined);
+    }
     fetchHistory();
-    toast({ title: "Deleted", description: "Transcription removed from history." });
-  }, [fetchHistory, toast]);
+    toast({ title: "Deleted", description: "Transcription removed." });
+  }, [fetchHistory, toast, activeHistoryId]);
+
+  const handleNewTranscription = useCallback(() => {
+    setStep("idle");
+    setTranscription("");
+    setTranslation("");
+    setDetectedLanguage("");
+    setIsEnglish(false);
+    setFileName("");
+    setActiveHistoryId(undefined);
+    setErrorMessage("");
+  }, []);
 
   const showResults = step === "done" && transcription;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex items-center justify-end px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground hidden sm:inline">{user?.email}</span>
-          <Button variant="ghost" size="sm" onClick={signOut}>
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Sign out</span>
-          </Button>
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full">
+        <HistorySidebar
+          records={history}
+          onSelect={handleSelectHistory}
+          onDelete={handleDeleteHistory}
+          onNewTranscription={handleNewTranscription}
+          activeId={activeHistoryId}
+        />
+
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top bar */}
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6 border-b border-border">
+            <SidebarTrigger />
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground hidden sm:inline">{user?.email}</span>
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign out</span>
+              </Button>
+            </div>
+          </div>
+
+          <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+            {!showResults && (
+              <>
+                <header className="mb-10 text-center">
+                  <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                    Devowl Transcriptor
+                  </h1>
+                  <p className="mt-3 text-muted-foreground">
+                    Upload any audio file — get an accurate transcription and English translation in seconds.
+                  </p>
+                </header>
+
+                <section className="mb-8">
+                  <AudioUploadZone
+                    onFileSelected={processAudio}
+                    isProcessing={step !== "idle" && step !== "done" && step !== "error"}
+                  />
+                </section>
+              </>
+            )}
+
+            {step !== "idle" && step !== "done" && (
+              <section className="mb-8">
+                <ProcessingStatus currentStep={step} errorMessage={errorMessage} />
+              </section>
+            )}
+
+            {showResults && (
+              <section>
+                <ResultsPane
+                  transcription={transcription}
+                  translation={translation}
+                  isEnglish={isEnglish}
+                  detectedLanguage={detectedLanguage}
+                />
+              </section>
+            )}
+          </main>
         </div>
       </div>
-      <main className="mx-auto max-w-4xl px-4 pb-12 sm:px-6 sm:pb-20">
-        <header className="mb-12 text-center">
-          <div className="mb-4 flex items-center justify-center">
-            <img src="/owl-favicon.png" alt="Devowl logo" className="h-14 w-14" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Devowl Transcriptor
-          </h1>
-          <p className="mt-3 text-muted-foreground">
-            Upload any audio file — get an accurate transcription and English translation in seconds.
-          </p>
-        </header>
-
-        <section className="mb-8">
-          <AudioUploadZone
-            onFileSelected={processAudio}
-            isProcessing={step !== "idle" && step !== "done" && step !== "error"}
-          />
-        </section>
-
-        {step !== "idle" && (
-          <section className="mb-8">
-            <ProcessingStatus currentStep={step} errorMessage={errorMessage} />
-          </section>
-        )}
-
-        {showResults && (
-          <section className="mb-8">
-            <ResultsPane
-              transcription={transcription}
-              translation={translation}
-              isEnglish={isEnglish}
-              detectedLanguage={detectedLanguage}
-            />
-          </section>
-        )}
-
-        {history.length > 0 && (
-          <section>
-            <TranscriptionHistory
-              records={history}
-              onSelect={handleSelectHistory}
-              onDelete={handleDeleteHistory}
-            />
-          </section>
-        )}
-      </main>
-    </div>
+    </SidebarProvider>
   );
 };
 
