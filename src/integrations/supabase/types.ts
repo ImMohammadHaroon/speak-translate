@@ -41,6 +41,39 @@ export type Database = {
         }
         Relationships: []
       }
+      transcriptions: {
+        Row: {
+          created_at: string
+          detected_language: string | null
+          file_name: string
+          id: string
+          is_english: boolean | null
+          transcription: string
+          translation: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          detected_language?: string | null
+          file_name: string
+          id?: string
+          is_english?: boolean | null
+          transcription: string
+          translation?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          detected_language?: string | null
+          file_name?: string
+          id?: string
+          is_english?: boolean | null
+          transcription?: string
+          translation?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

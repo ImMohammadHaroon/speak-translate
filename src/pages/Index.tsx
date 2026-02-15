@@ -1,13 +1,24 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AudioUploadZone } from "@/components/AudioUploadZone";
 import { ProcessingStatus, type ProcessingStep } from "@/components/ProcessingStatus";
 import { ResultsPane } from "@/components/ResultsPane";
+import { TranscriptionHistory } from "@/components/TranscriptionHistory";
 import { fileToBase64 } from "@/lib/audio-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+
+interface TranscriptionRecord {
+  id: string;
+  file_name: string;
+  detected_language: string | null;
+  transcription: string;
+  translation: string | null;
+  is_english: boolean;
+  created_at: string;
+}
 
 const Index = () => {
   const [step, setStep] = useState<ProcessingStep>("idle");
@@ -16,7 +27,23 @@ const Index = () => {
   const [translation, setTranslation] = useState("");
   const [detectedLanguage, setDetectedLanguage] = useState("");
   const [isEnglish, setIsEnglish] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const [history, setHistory] = useState<TranscriptionRecord[]>([]);
   const { toast } = useToast();
+  const { signOut, user } = useAuth();
+
+  const fetchHistory = useCallback(async () => {
+    const { data } = await supabase
+      .from("transcriptions")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (data) setHistory(data as TranscriptionRecord[]);
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const processAudio = useCallback(async (file: File) => {
     setStep("uploading");
@@ -25,12 +52,11 @@ const Index = () => {
     setTranslation("");
     setDetectedLanguage("");
     setIsEnglish(false);
+    setFileName(file.name);
 
     try {
-      // Step 1: Convert to base64
       const audioBase64 = await fileToBase64(file);
 
-      // Step 2: Transcribe
       setStep("transcribing");
       const { data: transcribeData, error: transcribeError } = await supabase.functions.invoke(
         "transcribe",
@@ -42,7 +68,6 @@ const Index = () => {
 
       let rawTranscription = transcribeData.transcription || "";
 
-      // Extract detected language from the [Language: ...] tag
       let lang = "Unknown";
       const langMatch = rawTranscription.match(/\[Language:\s*(.+?)\]/i);
       if (langMatch) {
@@ -52,7 +77,6 @@ const Index = () => {
       setDetectedLanguage(lang);
       setTranscription(rawTranscription);
 
-      // Step 3: Translate
       setStep("translating");
       const { data: translateData, error: translateError } = await supabase.functions.invoke(
         "translate",
@@ -62,10 +86,23 @@ const Index = () => {
       if (translateError) throw new Error(translateError.message || "Translation failed");
       if (translateData?.error) throw new Error(translateData.error);
 
-      setTranslation(translateData.translation || "");
-      setIsEnglish(lang.toLowerCase().includes("english") || !!translateData.isEnglish);
+      const translationText = translateData.translation || "";
+      const sourceIsEnglish = lang.toLowerCase().includes("english") || !!translateData.isEnglish;
 
+      setTranslation(translationText);
+      setIsEnglish(sourceIsEnglish);
       setStep("done");
+
+      // Save to history
+      await supabase.from("transcriptions").insert({
+        user_id: user?.id,
+        file_name: file.name,
+        detected_language: lang,
+        transcription: rawTranscription,
+        translation: translationText,
+        is_english: sourceIsEnglish,
+      });
+      fetchHistory();
     } catch (err: any) {
       console.error("Processing error:", err);
       setStep("error");
@@ -76,14 +113,27 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, user, fetchHistory]);
+
+  const handleSelectHistory = useCallback((record: TranscriptionRecord) => {
+    setTranscription(record.transcription);
+    setTranslation(record.translation || "");
+    setDetectedLanguage(record.detected_language || "Unknown");
+    setIsEnglish(record.is_english);
+    setFileName(record.file_name);
+    setStep("done");
+  }, []);
+
+  const handleDeleteHistory = useCallback(async (id: string) => {
+    await supabase.from("transcriptions").delete().eq("id", id);
+    fetchHistory();
+    toast({ title: "Deleted", description: "Transcription removed from history." });
+  }, [fetchHistory, toast]);
 
   const showResults = step === "done" && transcription;
-  const { signOut, user } = useAuth();
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Top bar */}
       <div className="flex items-center justify-end px-4 py-3 sm:px-6">
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground hidden sm:inline">{user?.email}</span>
@@ -94,7 +144,6 @@ const Index = () => {
         </div>
       </div>
       <main className="mx-auto max-w-4xl px-4 pb-12 sm:px-6 sm:pb-20">
-        {/* Hero */}
         <header className="mb-12 text-center">
           <div className="mb-4 flex items-center justify-center">
             <img src="/owl-favicon.png" alt="Devowl logo" className="h-14 w-14" />
@@ -107,7 +156,6 @@ const Index = () => {
           </p>
         </header>
 
-        {/* Upload Zone */}
         <section className="mb-8">
           <AudioUploadZone
             onFileSelected={processAudio}
@@ -115,21 +163,29 @@ const Index = () => {
           />
         </section>
 
-        {/* Processing Status */}
         {step !== "idle" && (
           <section className="mb-8">
             <ProcessingStatus currentStep={step} errorMessage={errorMessage} />
           </section>
         )}
 
-        {/* Results */}
         {showResults && (
-          <section>
+          <section className="mb-8">
             <ResultsPane
               transcription={transcription}
               translation={translation}
               isEnglish={isEnglish}
               detectedLanguage={detectedLanguage}
+            />
+          </section>
+        )}
+
+        {history.length > 0 && (
+          <section>
+            <TranscriptionHistory
+              records={history}
+              onSelect={handleSelectHistory}
+              onDelete={handleDeleteHistory}
             />
           </section>
         )}
