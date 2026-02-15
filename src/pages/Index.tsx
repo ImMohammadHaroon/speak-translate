@@ -5,7 +5,9 @@ import { ResultsPane } from "@/components/ResultsPane";
 import { fileToBase64 } from "@/lib/audio-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Languages, Headphones } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
 
 const Index = () => {
   const [step, setStep] = useState<ProcessingStep>("idle");
@@ -77,10 +79,21 @@ const Index = () => {
   }, [toast]);
 
   const showResults = step === "done" && transcription;
+  const { signOut, user } = useAuth();
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
+      {/* Top bar */}
+      <div className="flex items-center justify-end px-4 py-3 sm:px-6">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground hidden sm:inline">{user?.email}</span>
+          <Button variant="ghost" size="sm" onClick={signOut}>
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Sign out</span>
+          </Button>
+        </div>
+      </div>
+      <main className="mx-auto max-w-4xl px-4 pb-12 sm:px-6 sm:pb-20">
         {/* Hero */}
         <header className="mb-12 text-center">
           <div className="mb-4 flex items-center justify-center">
