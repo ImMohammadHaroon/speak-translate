@@ -13,7 +13,7 @@ const Signup = () => {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
+  
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -37,30 +37,9 @@ const Signup = () => {
       return;
     }
 
-    setSent(true);
-    toast({ title: "Check your email", description: "We sent you a verification link." });
+    navigate(`/verify-signup?email=${encodeURIComponent(email)}`);
   };
 
-  if (sent) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <img src="/owl-favicon.png" alt="Devowl" className="mx-auto mb-2 h-12 w-12" />
-            <CardTitle>Check your email</CardTitle>
-            <CardDescription>
-              We sent a verification link to <strong>{email}</strong>. Click it to activate your account.
-            </CardDescription>
-          </CardHeader>
-          <CardFooter className="justify-center">
-            <Link to="/login" className="text-sm text-primary hover:underline">
-              Back to login
-            </Link>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
