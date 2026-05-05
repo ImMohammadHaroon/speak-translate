@@ -32,8 +32,9 @@ const VerifySignup = () => {
         toast({ title: "Account verified!", description: "Welcome to Devowl Transcriptor. Please log in." });
         navigate("/login");
       }
-    } catch (err: any) {
-      toast({ title: "Verification failed", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Verification failed";
+      toast({ title: "Verification failed", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -51,8 +52,9 @@ const VerifySignup = () => {
       if (data?.error) throw new Error(data.error);
 
       toast({ title: "Code resent", description: `Check your email at ${email}` });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to resend code";
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   };
 
@@ -61,7 +63,7 @@ const VerifySignup = () => {
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <img src="/owl-favicon.png" alt="Devowl" className="mx-auto mb-2 h-12 w-12" />
+            <img src="/owl-favicon.svg" alt="Devowl" className="mx-auto mb-2 h-12 w-12" />
             <CardTitle>No email provided</CardTitle>
             <CardDescription>Please sign up first to receive a verification code.</CardDescription>
           </CardHeader>
@@ -77,7 +79,7 @@ const VerifySignup = () => {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <img src="/owl-favicon.png" alt="Devowl" className="mx-auto mb-2 h-12 w-12" />
+          <img src="/owl-favicon.svg" alt="Devowl" className="mx-auto mb-2 h-12 w-12" />
           <CardTitle>Verify your email</CardTitle>
           <CardDescription>
             Enter the 6-digit code sent to <strong>{email}</strong>

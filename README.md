@@ -1,73 +1,82 @@
-# Welcome to your Lovable project
+# Devowl Transcriptor
 
-## Project info
+> AI-powered audio transcription and translation — upload any audio file and get a high-accuracy transcription plus a fluent English translation in seconds.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+![Built with Vite](https://img.shields.io/badge/Vite-React-646CFF?logo=vite&logoColor=white)
+![Supabase](https://img.shields.io/badge/Backend-Supabase-3ECF8E?logo=supabase&logoColor=white)
+![Deployed on Vercel](https://img.shields.io/badge/Deployed-Vercel-000000?logo=vercel&logoColor=white)
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## Overview
 
-**Use Lovable**
+**Devowl Transcriptor** is a full-stack web application that allows authenticated users to:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- Upload any audio file and receive an **accurate transcription** in the original spoken language
+- Get a **fluent English translation** of the transcription (or an English cleanup pass if the audio was already in English)
+- **Review and manage history** — all transcriptions are saved per user and can be revisited or deleted at any time
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## Features
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+| Feature | Description |
+|---|---|
+| 🎙️ Audio Upload | Client-side validation and base64 encoding before sending to backend |
+| 📝 Transcription | Powered by the Lovable AI Gateway via a Supabase Edge Function |
+| 🌐 Translation | Separate Edge Function produces fluent English output |
+| 🗂️ History | All results are persisted in Postgres and accessible from the dashboard |
+| 🔐 Authentication | OTP-based email verification; dashboard is protected (auth required) |
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## Architecture
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```mermaid
+flowchart LR
+  Browser[Browser UI] -->|Upload audio| Frontend[Vite + React App]
+  Frontend -->|invoke transcribe| FnTranscribe[Edge Function: transcribe]
+  FnTranscribe -->|Lovable AI Gateway| AI1[AI Transcription Model]
+  Frontend -->|invoke translate| FnTranslate[Edge Function: translate]
+  FnTranslate -->|Lovable AI Gateway| AI2[AI Translation Model]
+  Frontend -->|read / write history| DB[(Supabase Postgres)]
+  Frontend <-->|session management| Auth[Supabase Auth]
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Project Structure
 
-**Use GitHub Codespaces**
+### Supabase Database (Migrations in `supabase/migrations/`)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| Table | Purpose |
+|---|---|
+| `profiles` | Stores user profile data |
+| `transcriptions` | Saves transcription and translation history per user |
+| `email_verifications` | Supports the OTP email verification flow |
 
-## What technologies are used for this project?
+### Supabase Edge Functions (`supabase/functions/`)
 
-This project is built with:
+| Function | Input | Output |
+|---|---|---|
+| `transcribe` | `{ audioBase64, mimeType, fileName }` | `{ transcription }` |
+| `translate` | `{ text, detectedLanguage }` | `{ translation, isEnglish }` |
+| `send-otp` | User email | Sends OTP via Resend |
+| `verify-otp` | OTP token | Verifies and authenticates user |
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## Environment Variables
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+### Frontend (Vite)
 
-## Can I connect a custom domain to my Lovable project?
+Create a `.env` file in the root directory:
 
-Yes, you can!
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Supabase Edge Functions
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Set these secrets in your Supabase project dashboard (not in the frontend):

@@ -105,13 +105,14 @@ const Index = () => {
         is_english: sourceIsEnglish,
       });
       fetchHistory();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Processing error:", err);
       setStep("error");
-      setErrorMessage(err.message || "An unexpected error occurred");
+      const message = err instanceof Error ? err.message : "An unexpected error occurred";
+      setErrorMessage(message);
       toast({
         title: "Processing Failed",
-        description: err.message || "An unexpected error occurred",
+        description: message,
         variant: "destructive",
       });
     }
