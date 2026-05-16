@@ -11,7 +11,7 @@ const ACCEPTED_TYPES = [
 
 const ACCEPTED_EXTENSIONS = [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".webm"];
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
 export function validateAudioFile(file: File): string | null {
   const ext = "." + file.name.split(".").pop()?.toLowerCase();
@@ -21,7 +21,7 @@ export function validateAudioFile(file: File): string | null {
     return `Unsupported file type. Please upload MP3, WAV, M4A, OGG, or FLAC files.`;
   }
   if (file.size > MAX_FILE_SIZE) {
-    return `File is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 20MB.`;
+    return `File is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 25MB.`;
   }
   return null;
 }

@@ -104,7 +104,7 @@ export function AudioUploadZone({ onFileSelected, isProcessing }: AudioUploadZon
               Drop your audio file here, or <span className="text-primary underline">browse</span>
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              MP3, WAV, M4A, OGG, FLAC — up to 20MB
+              MP3, WAV, M4A, OGG, FLAC — up to 25MB
             </p>
           </div>
         </>
