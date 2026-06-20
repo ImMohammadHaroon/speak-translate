@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { AudioUploadZone } from "@/components/AudioUploadZone";
+import { LiveRecorder } from "@/components/LiveRecorder";
 import { ProcessingStatus, type ProcessingStep } from "@/components/ProcessingStatus";
 import { ResultsPane } from "@/components/ResultsPane";
 import { HistorySidebar } from "@/components/HistorySidebar";
@@ -8,8 +9,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, Upload as UploadIcon, Mic } from "lucide-react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface TranscriptionRecord {
   id: string;
