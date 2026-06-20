@@ -237,10 +237,28 @@ const Index = () => {
                 </header>
 
                 <section className="mb-8">
-                  <AudioUploadZone
-                    onFileSelected={processAudio}
-                    isProcessing={step !== "idle" && step !== "done" && step !== "error"}
-                  />
+                  <Tabs defaultValue="upload" className="w-full">
+                    <TabsList className="grid w-full max-w-sm mx-auto grid-cols-2 mb-6">
+                      <TabsTrigger value="upload" className="gap-2">
+                        <UploadIcon className="h-4 w-4" /> Upload
+                      </TabsTrigger>
+                      <TabsTrigger value="record" className="gap-2">
+                        <Mic className="h-4 w-4" /> Record
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="upload">
+                      <AudioUploadZone
+                        onFileSelected={processAudio}
+                        isProcessing={step !== "idle" && step !== "done" && step !== "error"}
+                      />
+                    </TabsContent>
+                    <TabsContent value="record">
+                      <LiveRecorder
+                        onTranscriptComplete={processRecordedText}
+                        disabled={step !== "idle" && step !== "done" && step !== "error"}
+                      />
+                    </TabsContent>
+                  </Tabs>
                 </section>
               </>
             )}
