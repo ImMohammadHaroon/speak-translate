@@ -120,6 +120,51 @@ const Index = () => {
     }
   }, [toast, user, fetchHistory]);
 
+  const processRecordedText = useCallback(
+    async ({ text, fileName: recName }: { text: string; fileName: string }) => {
+      setStep("translating");
+      setErrorMessage("");
+      setFileName(recName);
+      setActiveHistoryId(undefined);
+      setTranscription(text);
+
+      try {
+        const { data: translateData, error: translateError } = await supabase.functions.invoke(
+          "translate",
+          { body: { text, detectedLanguage: "Unknown" } },
+        );
+        if (translateError) throw new Error(translateError.message || "Translation failed");
+        if (translateData?.error) throw new Error(translateData.error);
+
+        const translationText = translateData.translation || "";
+        const sourceIsEnglish = !!translateData.isEnglish;
+        const lang = translateData.detectedLanguage || "Unknown";
+
+        setTranslation(translationText);
+        setIsEnglish(sourceIsEnglish);
+        setDetectedLanguage(lang);
+        setStep("done");
+
+        await supabase.from("transcriptions").insert({
+          user_id: user?.id,
+          file_name: recName,
+          detected_language: lang,
+          transcription: text,
+          translation: translationText,
+          is_english: sourceIsEnglish,
+        });
+        fetchHistory();
+      } catch (err: unknown) {
+        console.error("Recorded text processing error:", err);
+        setStep("error");
+        const message = err instanceof Error ? err.message : "An unexpected error occurred";
+        setErrorMessage(message);
+        toast({ title: "Processing Failed", description: message, variant: "destructive" });
+      }
+    },
+    [toast, user, fetchHistory],
+  );
+
   const handleSelectHistory = useCallback((record: TranscriptionRecord) => {
     setTranscription(record.transcription);
     setTranslation(record.translation || "");
