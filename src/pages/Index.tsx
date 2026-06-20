@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { AudioUploadZone } from "@/components/AudioUploadZone";
+import { LiveRecorder } from "@/components/LiveRecorder";
 import { ProcessingStatus, type ProcessingStep } from "@/components/ProcessingStatus";
 import { ResultsPane } from "@/components/ResultsPane";
 import { HistorySidebar } from "@/components/HistorySidebar";
@@ -8,8 +9,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, Upload as UploadIcon, Mic } from "lucide-react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface TranscriptionRecord {
   id: string;
@@ -118,6 +120,51 @@ const Index = () => {
     }
   }, [toast, user, fetchHistory]);
 
+  const processRecordedText = useCallback(
+    async ({ text, fileName: recName }: { text: string; fileName: string }) => {
+      setStep("translating");
+      setErrorMessage("");
+      setFileName(recName);
+      setActiveHistoryId(undefined);
+      setTranscription(text);
+
+      try {
+        const { data: translateData, error: translateError } = await supabase.functions.invoke(
+          "translate",
+          { body: { text, detectedLanguage: "Unknown" } },
+        );
+        if (translateError) throw new Error(translateError.message || "Translation failed");
+        if (translateData?.error) throw new Error(translateData.error);
+
+        const translationText = translateData.translation || "";
+        const sourceIsEnglish = !!translateData.isEnglish;
+        const lang = translateData.detectedLanguage || "Unknown";
+
+        setTranslation(translationText);
+        setIsEnglish(sourceIsEnglish);
+        setDetectedLanguage(lang);
+        setStep("done");
+
+        await supabase.from("transcriptions").insert({
+          user_id: user?.id,
+          file_name: recName,
+          detected_language: lang,
+          transcription: text,
+          translation: translationText,
+          is_english: sourceIsEnglish,
+        });
+        fetchHistory();
+      } catch (err: unknown) {
+        console.error("Recorded text processing error:", err);
+        setStep("error");
+        const message = err instanceof Error ? err.message : "An unexpected error occurred";
+        setErrorMessage(message);
+        toast({ title: "Processing Failed", description: message, variant: "destructive" });
+      }
+    },
+    [toast, user, fetchHistory],
+  );
+
   const handleSelectHistory = useCallback((record: TranscriptionRecord) => {
     setTranscription(record.transcription);
     setTranslation(record.translation || "");
@@ -190,10 +237,28 @@ const Index = () => {
                 </header>
 
                 <section className="mb-8">
-                  <AudioUploadZone
-                    onFileSelected={processAudio}
-                    isProcessing={step !== "idle" && step !== "done" && step !== "error"}
-                  />
+                  <Tabs defaultValue="upload" className="w-full">
+                    <TabsList className="grid w-full max-w-sm mx-auto grid-cols-2 mb-6">
+                      <TabsTrigger value="upload" className="gap-2">
+                        <UploadIcon className="h-4 w-4" /> Upload
+                      </TabsTrigger>
+                      <TabsTrigger value="record" className="gap-2">
+                        <Mic className="h-4 w-4" /> Record
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="upload">
+                      <AudioUploadZone
+                        onFileSelected={processAudio}
+                        isProcessing={step !== "idle" && step !== "done" && step !== "error"}
+                      />
+                    </TabsContent>
+                    <TabsContent value="record">
+                      <LiveRecorder
+                        onTranscriptComplete={processRecordedText}
+                        disabled={step !== "idle" && step !== "done" && step !== "error"}
+                      />
+                    </TabsContent>
+                  </Tabs>
                 </section>
               </>
             )}
