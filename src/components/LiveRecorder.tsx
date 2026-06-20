@@ -9,27 +9,60 @@ interface LiveRecorderProps {
   disabled?: boolean;
 }
 
-type Phase = "idle" | "recording" | "transcribing" | "done";
+type Phase = "idle" | "recording" | "finalizing" | "done";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+// Minimal types for the Web Speech API (not in lib.dom)
+interface SRAlternative { transcript: string }
+interface SRResult { 0: SRAlternative; isFinal: boolean; length: number }
+interface SREvent extends Event {
+  resultIndex: number;
+  results: { length: number; [i: number]: SRResult };
+}
+interface SRErrorEvent extends Event { error: string }
+interface SpeechRecognitionLike extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((e: SREvent) => void) | null;
+  onerror: ((e: SRErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+type SRCtor = new () => SpeechRecognitionLike;
+
+function getSpeechRecognition(): SRCtor | null {
+  const w = window as unknown as {
+    SpeechRecognition?: SRCtor;
+    webkitSpeechRecognition?: SRCtor;
+  };
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
 
 export function LiveRecorder({ onTranscriptComplete, disabled }: LiveRecorderProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
-  const [liveText, setLiveText] = useState("");
+  const [finalText, setFinalText] = useState("");
+  const [interimText, setInterimText] = useState("");
   const [levels, setLevels] = useState<number[]>(() => Array(28).fill(0.15));
+  const [supported, setSupported] = useState(true);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(0);
+  const finalTextRef = useRef<string>("");
+  const stoppingRef = useRef(false);
 
   const { toast } = useToast();
+
+  useEffect(() => {
+    setSupported(!!getSpeechRecognition());
+  }, []);
 
   const cleanup = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -45,7 +78,10 @@ export function LiveRecorder({ onTranscriptComplete, disabled }: LiveRecorderPro
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
-    mediaRecorderRef.current = null;
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch { /* noop */ }
+      recognitionRef.current = null;
+    }
   }, []);
 
   useEffect(() => () => cleanup(), [cleanup]);
@@ -70,9 +106,23 @@ export function LiveRecorder({ onTranscriptComplete, disabled }: LiveRecorderPro
   }, []);
 
   const handleStart = useCallback(async () => {
-    if (phase !== "idle" && phase !== "done") return;
-    setLiveText("");
+    if (phase === "recording" || phase === "finalizing") return;
+    const SR = getSpeechRecognition();
+    if (!SR) {
+      toast({
+        title: "Live transcription not supported",
+        description:
+          "Your browser doesn't support live speech recognition. Use Chrome, Edge, or Safari.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setFinalText("");
+    setInterimText("");
+    finalTextRef.current = "";
     setElapsed(0);
+    stoppingRef.current = false;
 
     let stream: MediaStream;
     try {
@@ -87,43 +137,10 @@ export function LiveRecorder({ onTranscriptComplete, disabled }: LiveRecorderPro
     }
     streamRef.current = stream;
 
-    const mimeType = ["audio/webm", "audio/mp4"].find((t) =>
-      MediaRecorder.isTypeSupported(t),
-    );
-    if (!mimeType) {
-      stream.getTracks().forEach((t) => t.stop());
-      toast({
-        title: "Unsupported browser",
-        description: "This browser can't record a supported audio format.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const recorder = new MediaRecorder(stream, { mimeType });
-    chunksRef.current = [];
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-    recorder.onstop = async () => {
-      const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
-      cleanup();
-      if (blob.size < 1024) {
-        toast({
-          title: "Recording too short",
-          description: "Please record at least a second of audio.",
-          variant: "destructive",
-        });
-        setPhase("idle");
-        return;
-      }
-      await streamTranscribe(blob, recorder.mimeType);
-    };
-    mediaRecorderRef.current = recorder;
-
     // Audio visualization
     const AudioCtx =
-      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AudioCtx();
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
@@ -132,111 +149,93 @@ export function LiveRecorder({ onTranscriptComplete, disabled }: LiveRecorderPro
     audioCtxRef.current = ctx;
     analyserRef.current = analyser;
 
+    // Speech recognition
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || "en-US";
+
+    recognition.onresult = (event: SREvent) => {
+      let interim = "";
+      let appended = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const res = event.results[i];
+        const txt = res[0].transcript;
+        if (res.isFinal) appended += txt;
+        else interim += txt;
+      }
+      if (appended) {
+        finalTextRef.current = (finalTextRef.current + " " + appended).replace(/\s+/g, " ").trim();
+        setFinalText(finalTextRef.current);
+      }
+      setInterimText(interim.trim());
+    };
+
+    recognition.onerror = (e: SRErrorEvent) => {
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      console.error("SpeechRecognition error:", e.error);
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        toast({
+          title: "Microphone blocked",
+          description: "Please allow microphone access in your browser.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    recognition.onend = () => {
+      // Auto-restart while user is still recording (some browsers stop early)
+      if (!stoppingRef.current && recognitionRef.current) {
+        try { recognitionRef.current.start(); } catch { /* ignore */ }
+        return;
+      }
+      // User stopped — finalize
+      const text = (finalTextRef.current + " " + (interimText || "")).trim();
+      cleanup();
+      setInterimText("");
+      if (text.length === 0) {
+        toast({
+          title: "No speech detected",
+          description: "We couldn't hear anything. Try again.",
+          variant: "destructive",
+        });
+        setPhase("idle");
+        return;
+      }
+      setPhase("done");
+      const fileName = `live-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+      onTranscriptComplete({ text, fileName });
+    };
+
+    recognitionRef.current = recognition;
+    try { recognition.start(); } catch (err) { console.error(err); }
+
     startedAtRef.current = Date.now();
     timerRef.current = window.setInterval(() => {
       setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
     }, 250);
 
-    recorder.start();
     setPhase("recording");
     animateLevels();
-  }, [phase, toast, animateLevels, cleanup]);
-
-  const streamTranscribe = useCallback(
-    async (blob: Blob, mime: string) => {
-      setPhase("transcribing");
-      setLiveText("");
-
-      const form = new FormData();
-      const ext =
-        mime.includes("mp4") ? "mp4" : mime.includes("mpeg") ? "mp3" : "webm";
-      const fileName = `recording-${new Date().toISOString().replace(/[:.]/g, "-")}.${ext}`;
-      form.append("file", blob, fileName);
-
-      try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/transcribe-stream`, {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: form,
-        });
-
-        if (!res.ok || !res.body) {
-          const errBody = await res.json().catch(() => ({ error: "Transcription failed" }));
-          throw new Error(errBody.error || "Transcription failed");
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let finalText = "";
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-          for (const raw of lines) {
-            const line = raw.trim();
-            if (!line.startsWith("data:")) continue;
-            const payload = line.slice(5).trim();
-            if (!payload || payload === "[DONE]") continue;
-            try {
-              const evt = JSON.parse(payload);
-              if (evt.type === "transcript.text.delta" && typeof evt.delta === "string") {
-                finalText += evt.delta;
-                setLiveText(finalText);
-              } else if (evt.type === "transcript.text.done" && typeof evt.text === "string") {
-                finalText = evt.text;
-                setLiveText(finalText);
-              }
-            } catch {
-              /* ignore malformed */
-            }
-          }
-        }
-
-        setPhase("done");
-        if (finalText.trim().length > 0) {
-          onTranscriptComplete({ text: finalText.trim(), fileName });
-        } else {
-          toast({
-            title: "No speech detected",
-            description: "We couldn't hear anything. Try again.",
-            variant: "destructive",
-          });
-        }
-      } catch (e) {
-        console.error("Stream transcribe error:", e);
-        toast({
-          title: "Transcription failed",
-          description: e instanceof Error ? e.message : "Unknown error",
-          variant: "destructive",
-        });
-        setPhase("idle");
-      }
-    },
-    [onTranscriptComplete, toast],
-  );
+  }, [phase, toast, animateLevels, cleanup, onTranscriptComplete, interimText]);
 
   const handleStop = useCallback(() => {
-    const rec = mediaRecorderRef.current;
-    if (rec && rec.state !== "inactive") rec.stop();
-  }, []);
+    if (phase !== "recording") return;
+    stoppingRef.current = true;
+    setPhase("finalizing");
+    try { recognitionRef.current?.stop(); } catch { /* noop */ }
+  }, [phase]);
 
   const mmss = (s: number) =>
     `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   const isRecording = phase === "recording";
-  const isTranscribing = phase === "transcribing";
+  const isFinalizing = phase === "finalizing";
+  const liveDisplay = (finalText + (interimText ? " " + interimText : "")).trim();
 
   return (
     <div className="rounded-lg border border-border bg-card p-8 sm:p-10">
       <div className="flex flex-col items-center gap-6">
-        {/* Mic button + pulsing ring */}
         <div className="relative">
           {isRecording && (
             <>
@@ -249,11 +248,11 @@ export function LiveRecorder({ onTranscriptComplete, disabled }: LiveRecorderPro
             size="lg"
             variant={isRecording ? "destructive" : "default"}
             onClick={isRecording ? handleStop : handleStart}
-            disabled={disabled || isTranscribing}
+            disabled={disabled || isFinalizing || !supported}
             className="relative h-20 w-20 rounded-full shadow-lg transition-transform hover:scale-105"
             aria-label={isRecording ? "Stop recording" : "Start recording"}
           >
-            {isTranscribing ? (
+            {isFinalizing ? (
               <Loader2 className="h-8 w-8 animate-spin" />
             ) : isRecording ? (
               <Square className="h-7 w-7 fill-current" />
@@ -263,26 +262,29 @@ export function LiveRecorder({ onTranscriptComplete, disabled }: LiveRecorderPro
           </Button>
         </div>
 
-        {/* Status text */}
         <div className="text-center">
-          {phase === "idle" && (
-            <p className="text-base font-medium text-foreground">Tap the mic to start recording</p>
+          {!supported && (
+            <p className="text-sm text-destructive">
+              Live transcription isn't supported in this browser. Try Chrome, Edge, or Safari.
+            </p>
+          )}
+          {supported && phase === "idle" && (
+            <p className="text-base font-medium text-foreground">Tap the mic and start speaking</p>
           )}
           {isRecording && (
             <p className="text-base font-medium text-destructive flex items-center justify-center gap-2">
               <span className="inline-block h-2 w-2 rounded-full bg-destructive animate-pulse" />
-              Recording — {mmss(elapsed)}
+              Listening — {mmss(elapsed)}
             </p>
           )}
-          {isTranscribing && (
-            <p className="text-base font-medium text-primary">Transcribing live…</p>
+          {isFinalizing && (
+            <p className="text-base font-medium text-primary">Finishing up & translating…</p>
           )}
           {phase === "done" && (
             <p className="text-base font-medium text-foreground">Done. Tap mic to record again.</p>
           )}
         </div>
 
-        {/* Waveform */}
         <div className="flex h-16 w-full max-w-md items-center justify-center gap-1">
           {levels.map((lvl, i) => (
             <span
@@ -291,28 +293,29 @@ export function LiveRecorder({ onTranscriptComplete, disabled }: LiveRecorderPro
                 "w-1.5 rounded-full transition-all duration-75",
                 isRecording ? "bg-primary" : "bg-muted",
               )}
-              style={{
-                height: `${(isRecording ? lvl : 0.15) * 100}%`,
-                minHeight: 4,
-              }}
+              style={{ height: `${(isRecording ? lvl : 0.15) * 100}%`, minHeight: 4 }}
             />
           ))}
         </div>
 
-        {/* Live transcript */}
-        {(isTranscribing || (phase === "done" && liveText)) && (
+        {(isRecording || isFinalizing || (phase === "done" && finalText)) && (
           <div className="w-full rounded-md border border-border bg-muted/40 p-4 min-h-[100px] max-h-64 overflow-y-auto">
-            <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-              {liveText.split(/(\s+)/).map((token, i) =>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+              {finalText.split(/(\s+)/).map((token, i) =>
                 /\s+/.test(token) ? (
                   token
                 ) : (
-                  <span key={i} className="inline-block animate-fade-in">
+                  <span key={`f-${i}`} className="inline-block animate-fade-in text-foreground">
                     {token}
                   </span>
                 ),
               )}
-              {isTranscribing && (
+              {interimText && (
+                <span className="text-muted-foreground italic">
+                  {finalText ? " " : ""}{interimText}
+                </span>
+              )}
+              {isRecording && (
                 <span className="ml-1 inline-block h-4 w-0.5 bg-primary align-middle animate-pulse" />
               )}
             </p>
