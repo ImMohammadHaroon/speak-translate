@@ -4,6 +4,7 @@ import { LiveRecorder } from "@/components/LiveRecorder";
 import { ProcessingStatus, type ProcessingStep } from "@/components/ProcessingStatus";
 import { ResultsPane } from "@/components/ResultsPane";
 import { HistorySidebar } from "@/components/HistorySidebar";
+import { AnalysisPane, type AudioAnalysis } from "@/components/AnalysisPane";
 import { fileToBase64 } from "@/lib/audio-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +22,7 @@ interface TranscriptionRecord {
   translation: string | null;
   is_english: boolean;
   created_at: string;
+  analysis: AudioAnalysis | null;
 }
 
 const Index = () => {
@@ -31,6 +33,8 @@ const Index = () => {
   const [detectedLanguage, setDetectedLanguage] = useState("");
   const [isEnglish, setIsEnglish] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [analysis, setAnalysis] = useState<AudioAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const [history, setHistory] = useState<TranscriptionRecord[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string>();
   const { toast } = useToast();
@@ -42,12 +46,65 @@ const Index = () => {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50);
-    if (data) setHistory(data as TranscriptionRecord[]);
+    if (data) setHistory(data as unknown as TranscriptionRecord[]);
   }, []);
 
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
+
+  const runAnalysisAndSave = useCallback(
+    async ({
+      textForAnalysis,
+      transcriptionText,
+      translationText,
+      lang,
+      sourceIsEnglish,
+      name,
+    }: {
+      textForAnalysis: string;
+      transcriptionText: string;
+      translationText: string;
+      lang: string;
+      sourceIsEnglish: boolean;
+      name: string;
+    }) => {
+      setAnalyzing(true);
+      let analysisResult: AudioAnalysis | null = null;
+      try {
+        const { data: analyzeData, error: analyzeError } = await supabase.functions.invoke(
+          "analyze",
+          { body: { text: textForAnalysis } },
+        );
+        if (analyzeError) throw new Error(analyzeError.message || "Analysis failed");
+        if (analyzeData?.error) throw new Error(analyzeData.error);
+        analysisResult = (analyzeData?.analysis as AudioAnalysis) ?? null;
+        setAnalysis(analysisResult);
+      } catch (err) {
+        console.error("Analysis error:", err);
+        toast({
+          title: "AI analysis failed",
+          description: err instanceof Error ? err.message : "Could not generate insights.",
+          variant: "destructive",
+        });
+      } finally {
+        setAnalyzing(false);
+      }
+
+      await supabase.from("transcriptions").insert({
+        user_id: user?.id,
+        file_name: name,
+        detected_language: lang,
+        transcription: transcriptionText,
+        translation: translationText,
+        is_english: sourceIsEnglish,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        analysis: analysisResult as any,
+      });
+      fetchHistory();
+    },
+    [toast, user, fetchHistory],
+  );
 
   const processAudio = useCallback(async (file: File) => {
     setStep("uploading");
@@ -57,6 +114,7 @@ const Index = () => {
     setDetectedLanguage("");
     setIsEnglish(false);
     setFileName(file.name);
+    setAnalysis(null);
     setActiveHistoryId(undefined);
 
     try {
@@ -98,15 +156,14 @@ const Index = () => {
       setIsEnglish(sourceIsEnglish);
       setStep("done");
 
-      await supabase.from("transcriptions").insert({
-        user_id: user?.id,
-        file_name: file.name,
-        detected_language: lang,
-        transcription: rawTranscription,
-        translation: translationText,
-        is_english: sourceIsEnglish,
+      await runAnalysisAndSave({
+        textForAnalysis: sourceIsEnglish ? translationText || rawTranscription : translationText,
+        transcriptionText: rawTranscription,
+        translationText,
+        lang,
+        sourceIsEnglish,
+        name: file.name,
       });
-      fetchHistory();
     } catch (err: unknown) {
       console.error("Processing error:", err);
       setStep("error");
@@ -118,13 +175,14 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  }, [toast, user, fetchHistory]);
+  }, [toast, runAnalysisAndSave]);
 
   const processRecordedText = useCallback(
     async ({ text, fileName: recName }: { text: string; fileName: string }) => {
       setStep("translating");
       setErrorMessage("");
       setFileName(recName);
+      setAnalysis(null);
       setActiveHistoryId(undefined);
       setTranscription(text);
 
@@ -145,15 +203,14 @@ const Index = () => {
         setDetectedLanguage(lang);
         setStep("done");
 
-        await supabase.from("transcriptions").insert({
-          user_id: user?.id,
-          file_name: recName,
-          detected_language: lang,
-          transcription: text,
-          translation: translationText,
-          is_english: sourceIsEnglish,
+        await runAnalysisAndSave({
+          textForAnalysis: translationText || text,
+          transcriptionText: text,
+          translationText,
+          lang,
+          sourceIsEnglish,
+          name: recName,
         });
-        fetchHistory();
       } catch (err: unknown) {
         console.error("Recorded text processing error:", err);
         setStep("error");
@@ -162,7 +219,7 @@ const Index = () => {
         toast({ title: "Processing Failed", description: message, variant: "destructive" });
       }
     },
-    [toast, user, fetchHistory],
+    [toast, runAnalysisAndSave],
   );
 
   const handleSelectHistory = useCallback((record: TranscriptionRecord) => {
@@ -171,6 +228,8 @@ const Index = () => {
     setDetectedLanguage(record.detected_language || "Unknown");
     setIsEnglish(record.is_english);
     setFileName(record.file_name);
+    setAnalysis(record.analysis ?? null);
+    setAnalyzing(false);
     setActiveHistoryId(record.id);
     setStep("done");
   }, []);
@@ -181,6 +240,7 @@ const Index = () => {
       setStep("idle");
       setTranscription("");
       setTranslation("");
+      setAnalysis(null);
       setActiveHistoryId(undefined);
     }
     fetchHistory();
@@ -194,6 +254,8 @@ const Index = () => {
     setDetectedLanguage("");
     setIsEnglish(false);
     setFileName("");
+    setAnalysis(null);
+    setAnalyzing(false);
     setActiveHistoryId(undefined);
     setErrorMessage("");
   }, []);
@@ -212,7 +274,6 @@ const Index = () => {
         />
 
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Top bar */}
           <div className="flex items-center justify-between px-4 py-3 sm:px-6 border-b border-border">
             <SidebarTrigger />
             <div className="flex items-center gap-3">
@@ -232,7 +293,7 @@ const Index = () => {
                     Devowl Transcriptor
                   </h1>
                   <p className="mt-3 text-muted-foreground">
-                    Upload any audio file — get an accurate transcription and English translation in seconds.
+                    Upload any audio file — get an accurate transcription, English translation, and AI-powered insights.
                   </p>
                 </header>
 
@@ -270,13 +331,14 @@ const Index = () => {
             )}
 
             {showResults && (
-              <section>
+              <section className="space-y-6">
                 <ResultsPane
                   transcription={transcription}
                   translation={translation}
                   isEnglish={isEnglish}
                   detectedLanguage={detectedLanguage}
                 />
+                <AnalysisPane analysis={analysis} loading={analyzing} />
               </section>
             )}
           </main>

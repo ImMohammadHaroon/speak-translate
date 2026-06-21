@@ -1,0 +1,1 @@
+ALTER TABLE public.transcriptions ADD COLUMN IF NOT EXISTS analysis jsonb;
