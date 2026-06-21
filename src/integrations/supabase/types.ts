@@ -70,6 +70,7 @@ export type Database = {
       }
       transcriptions: {
         Row: {
+          analysis: Json | null
           created_at: string
           detected_language: string | null
           file_name: string
@@ -80,6 +81,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          analysis?: Json | null
           created_at?: string
           detected_language?: string | null
           file_name: string
@@ -90,6 +92,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          analysis?: Json | null
           created_at?: string
           detected_language?: string | null
           file_name?: string
