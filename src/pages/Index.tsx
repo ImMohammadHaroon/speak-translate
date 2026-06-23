@@ -351,9 +351,6 @@ const Index = () => {
                 fileName={fileName}
               />
             )}
-            {false && (
-              <section />
-            )}
           </main>
         </div>
       </div>
