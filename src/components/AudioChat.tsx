@@ -154,7 +154,7 @@ export function AudioChat({ transcriptionId, transcription, translation, analysi
 
         <ScrollArea className="flex-1 px-6 py-4" ref={scrollRef as never}>
           <div className="space-y-4">
-            {messages.length === 0 && (
+            {messages.length === 0 && !loadingHistory && (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">Try asking:</p>
                 <div className="flex flex-wrap gap-2">
