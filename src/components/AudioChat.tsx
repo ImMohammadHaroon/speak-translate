@@ -137,13 +137,19 @@ export function AudioChat({ transcription, translation, analysis, fileName }: Au
                 </div>
                 <div
                   className={cn(
-                    "rounded-lg px-3 py-2 text-sm max-w-[85%] whitespace-pre-wrap leading-relaxed",
+                    "rounded-2xl px-4 py-2.5 text-sm max-w-[85%] leading-relaxed shadow-sm",
                     m.role === "user"
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-primary text-primary-foreground whitespace-pre-wrap"
                       : "bg-muted text-foreground",
                   )}
                 >
-                  {m.content}
+                  {m.role === "user" ? (
+                    m.content
+                  ) : (
+                    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-headings:mt-3 prose-headings:mb-1 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-code:before:hidden prose-code:after:hidden">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -161,17 +167,22 @@ export function AudioChat({ transcription, translation, analysis, fileName }: Au
           </div>
         </ScrollArea>
 
-        <div className="border-t p-4">
+        <div className="border-t bg-background p-3">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               send(input);
             }}
-            className="flex gap-2 items-end"
+            className="relative flex items-end rounded-2xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:border-ring transition-shadow shadow-sm"
           >
-            <Textarea
+            <textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                const el = e.target as HTMLTextAreaElement;
+                el.style.height = "auto";
+                el.style.height = Math.min(el.scrollHeight, 200) + "px";
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -179,14 +190,22 @@ export function AudioChat({ transcription, translation, analysis, fileName }: Au
                 }
               }}
               placeholder="Ask about this audio..."
-              rows={2}
-              className="resize-none min-h-[44px]"
+              rows={1}
+              className="flex-1 resize-none bg-transparent px-4 py-3 pr-14 text-sm leading-relaxed outline-none placeholder:text-muted-foreground max-h-[200px] overflow-y-auto"
               disabled={loading}
             />
-            <Button type="submit" size="icon" disabled={loading || !input.trim()}>
+            <Button
+              type="submit"
+              size="icon"
+              disabled={loading || !input.trim()}
+              className="absolute right-2 bottom-2 h-9 w-9 rounded-xl shrink-0"
+            >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </form>
+          <p className="text-[10px] text-muted-foreground mt-2 px-1">
+            Press Enter to send · Shift+Enter for new line
+          </p>
         </div>
       </SheetContent>
     </Sheet>
