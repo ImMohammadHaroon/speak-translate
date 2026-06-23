@@ -5,6 +5,7 @@ import { ProcessingStatus, type ProcessingStep } from "@/components/ProcessingSt
 import { ResultsPane } from "@/components/ResultsPane";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { AnalysisPane, type AudioAnalysis } from "@/components/AnalysisPane";
+import { AudioChat } from "@/components/AudioChat";
 import { fileToBase64 } from "@/lib/audio-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -340,6 +341,18 @@ const Index = () => {
                 />
                 <AnalysisPane analysis={analysis} loading={analyzing} />
               </section>
+            )}
+
+            {showResults && (
+              <AudioChat
+                transcription={transcription}
+                translation={translation}
+                analysis={analysis}
+                fileName={fileName}
+              />
+            )}
+            {false && (
+              <section />
             )}
           </main>
         </div>
