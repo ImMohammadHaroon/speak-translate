@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Send, Loader2, Sparkles, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
