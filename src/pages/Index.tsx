@@ -92,7 +92,7 @@ const Index = () => {
         setAnalyzing(false);
       }
 
-      await supabase.from("transcriptions").insert({
+      const { data: inserted } = await supabase.from("transcriptions").insert({
         user_id: user?.id,
         file_name: name,
         detected_language: lang,
@@ -101,7 +101,8 @@ const Index = () => {
         is_english: sourceIsEnglish,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         analysis: analysisResult as any,
-      });
+      }).select("id").single();
+      if (inserted?.id) setActiveHistoryId(inserted.id);
       fetchHistory();
     },
     [toast, user, fetchHistory],
@@ -343,8 +344,9 @@ const Index = () => {
               </section>
             )}
 
-            {showResults && (
+            {showResults && activeHistoryId && (
               <AudioChat
+                transcriptionId={activeHistoryId}
                 transcription={transcription}
                 translation={translation}
                 analysis={analysis}
