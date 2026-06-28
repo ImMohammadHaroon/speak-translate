@@ -51,7 +51,7 @@ const VerifyOTP = () => {
     }
 
     toast({ title: "Verified!", description: "You're now logged in." });
-    navigate("/");
+    navigate("/app");
   };
 
   return (

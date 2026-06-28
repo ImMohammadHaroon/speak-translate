@@ -38,7 +38,7 @@ const Signup = () => {
     }
 
     toast({ title: "Account created!", description: "Welcome to Devowl Transcriptor." });
-    navigate("/");
+    navigate("/app");
   };
 
   return (
