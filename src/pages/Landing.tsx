@@ -553,11 +553,11 @@ function DemoPreview() {
                 </div>
               </div>
               <div className="mt-4 flex gap-2">
-                <div className="rounded-full bg-primary/10 text-primary text-xs px-3 py-1">
-                  ✓ 3 action items
+                <div className="rounded-full bg-primary/10 text-primary text-xs px-3 py-1 inline-flex items-center gap-1.5">
+                  <Check className="h-3 w-3" /> 3 action items
                 </div>
-                <div className="rounded-full bg-accent/10 text-accent-foreground text-xs px-3 py-1">
-                  2 decisions
+                <div className="rounded-full bg-accent/10 text-accent-foreground text-xs px-3 py-1 inline-flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3" /> 2 decisions
                 </div>
               </div>
             </div>
