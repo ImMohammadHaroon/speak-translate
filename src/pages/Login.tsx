@@ -28,7 +28,7 @@ const Login = () => {
       return;
     }
 
-    navigate("/");
+    navigate("/app");
   };
 
   return (
