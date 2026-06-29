@@ -1,8 +1,11 @@
 import { Copy, Download, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useCallback } from "react";
+
+const textPanelClass =
+  "h-[300px] sm:h-[400px] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+const textBodyClass = "whitespace-pre-wrap text-sm leading-7 text-foreground";
 
 interface ResultsPaneProps {
   transcription: string;
@@ -62,11 +65,9 @@ export function ResultsPane({ transcription, translation, isEnglish, detectedLan
             <CopyButton text={transcription} label="Copy" />
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[300px] sm:h-[400px]">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                {transcription}
-              </p>
-            </ScrollArea>
+            <div className={textPanelClass}>
+              <p className={textBodyClass}>{transcription}</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -76,18 +77,16 @@ export function ResultsPane({ transcription, translation, isEnglish, detectedLan
             {!isEnglish && <CopyButton text={translation} label="Copy" />}
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[300px] sm:h-[400px]">
+            <div className={textPanelClass}>
               {isEnglish ? (
-                <p className="text-sm text-muted-foreground italic">
+                <p className="text-sm leading-7 text-muted-foreground italic">
                   The source audio is already in English. The original transcription above has been
                   cleaned for grammar and formatting.
                 </p>
               ) : (
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                  {translation}
-                </p>
+                <p className={textBodyClass}>{translation}</p>
               )}
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       </div>
