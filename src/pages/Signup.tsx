@@ -45,7 +45,9 @@ const Signup = () => {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <img src="/owl-favicon.png" alt="Devowl" className="mx-auto mb-2 h-12 w-12" />
+          <Link to="/">
+            <img src="/owl-favicon.svg" alt="Devowl" className="mx-auto mb-2 h-12 w-12" />
+          </Link>
           <CardTitle>Create Account</CardTitle>
           <CardDescription>Sign up for Devowl Transcriptor</CardDescription>
         </CardHeader>

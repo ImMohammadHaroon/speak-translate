@@ -8,6 +8,7 @@ import { AnalysisPane, type AudioAnalysis } from "@/components/AnalysisPane";
 import { AudioChat } from "@/components/AudioChat";
 import { fileToBase64 } from "@/lib/audio-utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ const Index = () => {
   const [activeHistoryId, setActiveHistoryId] = useState<string>();
   const { toast } = useToast();
   const { signOut, user } = useAuth();
+  const navigate = useNavigate();
 
   const fetchHistory = useCallback(async () => {
     const { data } = await supabase
@@ -282,7 +284,14 @@ const Index = () => {
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground hidden sm:inline">{user?.email}</span>
               <ThemeToggle />
-              <Button variant="ghost" size="sm" onClick={signOut}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  await signOut();
+                  navigate("/");
+                }}
+              >
                 <LogOut className="h-4 w-4" />
                 <span className="hidden sm:inline">Sign out</span>
               </Button>
