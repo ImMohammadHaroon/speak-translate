@@ -5,21 +5,12 @@ import { LandingHero } from "@/components/landing/LandingHero";
 import { LandingNav } from "@/components/landing/LandingNav";
 import Landing from "@/pages/Landing";
 
-vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => ({
-    user: null,
-    session: null,
-    loading: false,
-    signOut: vi.fn(),
-  }),
-}));
-
 vi.mock("@/components/ThemeToggle", () => ({
   ThemeToggle: () => <button type="button" aria-label="Toggle theme" />,
 }));
 
 describe("landing page", () => {
-  it("shows the product promise and routes to signup", () => {
+  it("shows the product promise and opens the app", () => {
     render(
       <MemoryRouter>
         <LandingHero />
@@ -27,8 +18,8 @@ describe("landing page", () => {
     );
 
     expect(screen.getByRole("heading", { name: /every recording, written and translated/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Get started" })).toHaveAttribute("href", "/signup");
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "Open app" })).toHaveAttribute("href", "/app");
+    expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
   });
 
   it("keeps primary nav links on the marketing page", () => {
@@ -38,8 +29,8 @@ describe("landing page", () => {
       </MemoryRouter>,
     );
 
-    const signupLinks = screen.getAllByRole("link", { name: "Get started" });
-    expect(signupLinks[0]).toHaveAttribute("href", "/signup");
+    const appLinks = screen.getAllByRole("link", { name: "Open app" });
+    expect(appLinks[0]).toHaveAttribute("href", "/app");
     expect(screen.getAllByRole("link", { name: "How it works" })[0]).toHaveAttribute("href", "#how-it-works");
   });
 
