@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 import type { AudioAnalysis } from "@/components/AnalysisPane";
 
 interface AudioChatProps {
-  transcriptionId: string;
   transcription: string;
   translation: string;
   analysis: AudioAnalysis | null;
@@ -30,39 +29,13 @@ const SUGGESTIONS = [
   "What's the overall sentiment?",
 ];
 
-export function AudioChat({ transcriptionId, transcription, translation, analysis, fileName }: AudioChatProps) {
+export function AudioChat({ transcription, translation, analysis, fileName }: AudioChatProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-
-  // Load saved chat history when transcription changes
-  useEffect(() => {
-    let cancelled = false;
-    setMessages([]);
-    if (!transcriptionId) return;
-    setLoadingHistory(true);
-    (async () => {
-      const { data, error } = await supabase
-        .from("audio_chat_messages")
-        .select("role, content")
-        .eq("transcription_id", transcriptionId)
-        .order("created_at", { ascending: true });
-      if (cancelled) return;
-      if (!error && data) {
-        setMessages(
-          data.map((d) => ({ role: d.role as "user" | "assistant", content: d.content })),
-        );
-      }
-      setLoadingHistory(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [transcriptionId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -80,18 +53,6 @@ export function AudioChat({ transcriptionId, transcription, translation, analysi
       setInput("");
       setLoading(true);
 
-      // Persist user message
-      const { data: userAuth } = await supabase.auth.getUser();
-      const uid = userAuth.user?.id;
-      if (uid) {
-        await supabase.from("audio_chat_messages").insert({
-          user_id: uid,
-          transcription_id: transcriptionId,
-          role: "user",
-          content: trimmed,
-        });
-      }
-
       try {
         const { data, error } = await supabase.functions.invoke("audio-chat", {
           body: {
@@ -106,15 +67,6 @@ export function AudioChat({ transcriptionId, transcription, translation, analysi
         if (data?.error) throw new Error(data.error);
         const reply = data?.reply || "(no response)";
         setMessages([...next, { role: "assistant", content: reply }]);
-
-        if (uid) {
-          await supabase.from("audio_chat_messages").insert({
-            user_id: uid,
-            transcription_id: transcriptionId,
-            role: "assistant",
-            content: reply,
-          });
-        }
       } catch (err) {
         toast({
           title: "Chat failed",
@@ -126,7 +78,7 @@ export function AudioChat({ transcriptionId, transcription, translation, analysi
         setLoading(false);
       }
     },
-    [messages, loading, transcriptionId, transcription, translation, analysis, fileName, toast],
+    [messages, loading, transcription, translation, analysis, fileName, toast],
   );
 
 
@@ -154,7 +106,7 @@ export function AudioChat({ transcriptionId, transcription, translation, analysi
 
         <ScrollArea className="flex-1 px-6 py-4" ref={scrollRef as never}>
           <div className="space-y-4">
-            {messages.length === 0 && !loadingHistory && (
+            {messages.length === 0 && (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">Try asking:</p>
                 <div className="flex flex-wrap gap-2">

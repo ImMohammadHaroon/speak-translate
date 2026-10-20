@@ -13,7 +13,7 @@ const steps = [
   },
   {
     title: "Keep what matters",
-    body: "Summaries, action items, and a chat that already knows the recording. History stays on your account.",
+    body: "Summaries, action items, and a chat that already knows the recording. Nothing is saved after you leave.",
     image: "/landing/listener.jpg",
     alt: "Person listening with headphones in a quiet olive-toned study",
   },

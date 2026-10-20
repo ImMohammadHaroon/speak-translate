@@ -1,9 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
 
 export function ClosingCta() {
-  const { user } = useAuth();
 
   return (
     <section className="px-4 pb-20 md:px-8 md:pb-28">
@@ -16,7 +14,7 @@ export function ClosingCta() {
           size="lg"
           className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 active:scale-[0.98]"
         >
-          <Link to={user ? "/app" : "/signup"}>{user ? "Open app" : "Get started"}</Link>
+          <Link to="/app">Open app</Link>
         </Button>
       </div>
     </section>
