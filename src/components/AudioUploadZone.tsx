@@ -51,7 +51,7 @@ export function AudioUploadZone({ onFileSelected, isProcessing }: AudioUploadZon
     if (isProcessing) return;
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".mp3,.wav,.m4a,.ogg,.flac,.webm";
+    input.accept = ".mp3,.mpeg,.mpg,.wav,.m4a,.ogg,.flac,.webm,audio/mpeg,video/mpeg";
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) handleFile(file);
@@ -104,7 +104,7 @@ export function AudioUploadZone({ onFileSelected, isProcessing }: AudioUploadZon
               Drop your audio file here, or <span className="text-primary underline">browse</span>
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              MP3, WAV, M4A, OGG, FLAC — up to 25MB
+              MP3, MPEG, WAV, M4A, OGG, FLAC — up to 25MB
             </p>
           </div>
         </>

@@ -6,7 +6,7 @@ import { ResultsPane } from "@/components/ResultsPane";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { AnalysisPane, type AudioAnalysis } from "@/components/AnalysisPane";
 import { AudioChat } from "@/components/AudioChat";
-import { fileToBase64 } from "@/lib/audio-utils";
+import { fileToBase64, resolveAudioMimeType } from "@/lib/audio-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -128,7 +128,7 @@ const Index = () => {
       setStep("transcribing");
       const { data: transcribeData, error: transcribeError } = await supabase.functions.invoke(
         "transcribe",
-        { body: { audioBase64, mimeType: file.type, fileName: file.name } }
+        { body: { audioBase64, mimeType: resolveAudioMimeType(file), fileName: file.name } }
       );
 
       if (transcribeError) throw new Error(transcribeError.message || "Transcription failed");

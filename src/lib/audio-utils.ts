@@ -1,5 +1,7 @@
 const ACCEPTED_TYPES = [
   "audio/mpeg",
+  "audio/mp3",
+  "video/mpeg", // browsers often report .mpeg audio this way
   "audio/wav",
   "audio/x-wav",
   "audio/mp4",
@@ -9,7 +11,18 @@ const ACCEPTED_TYPES = [
   "audio/webm",
 ];
 
-const ACCEPTED_EXTENSIONS = [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".webm"];
+const ACCEPTED_EXTENSIONS = [".mp3", ".mpeg", ".mpg", ".wav", ".m4a", ".ogg", ".flac", ".webm"];
+
+const EXT_TO_MIME: Record<string, string> = {
+  ".mp3": "audio/mpeg",
+  ".mpeg": "audio/mpeg",
+  ".mpg": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".ogg": "audio/ogg",
+  ".flac": "audio/flac",
+  ".webm": "audio/webm",
+};
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
@@ -18,12 +31,20 @@ export function validateAudioFile(file: File): string | null {
   const isValidType = ACCEPTED_TYPES.includes(file.type) || ACCEPTED_EXTENSIONS.includes(ext);
 
   if (!isValidType) {
-    return `Unsupported file type. Please upload MP3, WAV, M4A, OGG, or FLAC files.`;
+    return `Unsupported file type. Please upload MP3, MPEG, WAV, M4A, OGG, or FLAC files.`;
   }
   if (file.size > MAX_FILE_SIZE) {
     return `File is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 25MB.`;
   }
   return null;
+}
+
+/** Normalize browser MIME (often empty or video/mpeg for .mpeg) for the transcribe API. */
+export function resolveAudioMimeType(file: File): string {
+  const ext = "." + file.name.split(".").pop()?.toLowerCase();
+  if (file.type === "video/mpeg" || file.type === "audio/mp3") return "audio/mpeg";
+  if (file.type && ACCEPTED_TYPES.includes(file.type)) return file.type;
+  return EXT_TO_MIME[ext] || file.type || "audio/mpeg";
 }
 
 export function fileToBase64(file: File): Promise<string> {
