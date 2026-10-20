@@ -1,11 +1,9 @@
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
 
 export function LandingHero() {
   const reduce = useReducedMotion();
-  const { user } = useAuth();
   const animateIn = reduce === false;
   const enter = animateIn
     ? { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 } }
@@ -26,13 +24,8 @@ export function LandingHero() {
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Button asChild size="lg" className="active:scale-[0.98]">
-            <Link to={user ? "/app" : "/signup"}>{user ? "Open app" : "Get started"}</Link>
+            <Link to="/app">Open app</Link>
           </Button>
-          {!user && (
-            <Button asChild variant="outline" size="lg" className="active:scale-[0.98]">
-              <Link to="/login">Log in</Link>
-            </Button>
-          )}
         </div>
       </motion.div>
 
