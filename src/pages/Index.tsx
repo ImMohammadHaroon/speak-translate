@@ -1,32 +1,18 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { AudioUploadZone } from "@/components/AudioUploadZone";
 import { LiveRecorder } from "@/components/LiveRecorder";
 import { ProcessingStatus, type ProcessingStep } from "@/components/ProcessingStatus";
 import { ResultsPane } from "@/components/ResultsPane";
-import { HistorySidebar } from "@/components/HistorySidebar";
 import { AnalysisPane, type AudioAnalysis } from "@/components/AnalysisPane";
 import { AudioChat } from "@/components/AudioChat";
 import { fileToBase64, resolveAudioMimeType } from "@/lib/audio-utils";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Upload as UploadIcon, Mic } from "lucide-react";
+import { Upload as UploadIcon, Mic } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-interface TranscriptionRecord {
-  id: string;
-  file_name: string;
-  detected_language: string | null;
-  transcription: string;
-  translation: string | null;
-  is_english: boolean;
-  created_at: string;
-  analysis: AudioAnalysis | null;
-}
 
 const Index = () => {
   const [step, setStep] = useState<ProcessingStep>("idle");
@@ -38,43 +24,11 @@ const Index = () => {
   const [fileName, setFileName] = useState("");
   const [analysis, setAnalysis] = useState<AudioAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [history, setHistory] = useState<TranscriptionRecord[]>([]);
-  const [activeHistoryId, setActiveHistoryId] = useState<string>();
   const { toast } = useToast();
-  const { signOut, user } = useAuth();
-  const navigate = useNavigate();
 
-  const fetchHistory = useCallback(async () => {
-    const { data } = await supabase
-      .from("transcriptions")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (data) setHistory(data as unknown as TranscriptionRecord[]);
-  }, []);
-
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  const runAnalysisAndSave = useCallback(
-    async ({
-      textForAnalysis,
-      transcriptionText,
-      translationText,
-      lang,
-      sourceIsEnglish,
-      name,
-    }: {
-      textForAnalysis: string;
-      transcriptionText: string;
-      translationText: string;
-      lang: string;
-      sourceIsEnglish: boolean;
-      name: string;
-    }) => {
+  const runAnalysis = useCallback(
+    async (textForAnalysis: string) => {
       setAnalyzing(true);
-      let analysisResult: AudioAnalysis | null = null;
       try {
         const { data: analyzeData, error: analyzeError } = await supabase.functions.invoke(
           "analyze",
@@ -82,8 +36,7 @@ const Index = () => {
         );
         if (analyzeError) throw new Error(analyzeError.message || "Analysis failed");
         if (analyzeData?.error) throw new Error(analyzeData.error);
-        analysisResult = (analyzeData?.analysis as AudioAnalysis) ?? null;
-        setAnalysis(analysisResult);
+        setAnalysis((analyzeData?.analysis as AudioAnalysis) ?? null);
       } catch (err) {
         console.error("Analysis error:", err);
         toast({
@@ -94,21 +47,8 @@ const Index = () => {
       } finally {
         setAnalyzing(false);
       }
-
-      const { data: inserted } = await supabase.from("transcriptions").insert({
-        user_id: user?.id,
-        file_name: name,
-        detected_language: lang,
-        transcription: transcriptionText,
-        translation: translationText,
-        is_english: sourceIsEnglish,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        analysis: analysisResult as any,
-      }).select("id").single();
-      if (inserted?.id) setActiveHistoryId(inserted.id);
-      fetchHistory();
     },
-    [toast, user, fetchHistory],
+    [toast],
   );
 
   const processAudio = useCallback(async (file: File) => {
@@ -120,7 +60,6 @@ const Index = () => {
     setIsEnglish(false);
     setFileName(file.name);
     setAnalysis(null);
-    setActiveHistoryId(undefined);
 
     try {
       const audioBase64 = await fileToBase64(file);
@@ -161,14 +100,7 @@ const Index = () => {
       setIsEnglish(sourceIsEnglish);
       setStep("done");
 
-      await runAnalysisAndSave({
-        textForAnalysis: sourceIsEnglish ? translationText || rawTranscription : translationText,
-        transcriptionText: rawTranscription,
-        translationText,
-        lang,
-        sourceIsEnglish,
-        name: file.name,
-      });
+      await runAnalysis(sourceIsEnglish ? translationText || rawTranscription : translationText);
     } catch (err: unknown) {
       console.error("Processing error:", err);
       setStep("error");
@@ -180,7 +112,7 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  }, [toast, runAnalysisAndSave]);
+  }, [toast, runAnalysis]);
 
   const processRecordedText = useCallback(
     async ({ text, fileName: recName }: { text: string; fileName: string }) => {
@@ -188,7 +120,6 @@ const Index = () => {
       setErrorMessage("");
       setFileName(recName);
       setAnalysis(null);
-      setActiveHistoryId(undefined);
       setTranscription(text);
 
       try {
@@ -208,14 +139,7 @@ const Index = () => {
         setDetectedLanguage(lang);
         setStep("done");
 
-        await runAnalysisAndSave({
-          textForAnalysis: translationText || text,
-          transcriptionText: text,
-          translationText,
-          lang,
-          sourceIsEnglish,
-          name: recName,
-        });
+        await runAnalysis(translationText || text);
       } catch (err: unknown) {
         console.error("Recorded text processing error:", err);
         setStep("error");
@@ -224,33 +148,8 @@ const Index = () => {
         toast({ title: "Processing Failed", description: message, variant: "destructive" });
       }
     },
-    [toast, runAnalysisAndSave],
+    [toast, runAnalysis],
   );
-
-  const handleSelectHistory = useCallback((record: TranscriptionRecord) => {
-    setTranscription(record.transcription);
-    setTranslation(record.translation || "");
-    setDetectedLanguage(record.detected_language || "Unknown");
-    setIsEnglish(record.is_english);
-    setFileName(record.file_name);
-    setAnalysis(record.analysis ?? null);
-    setAnalyzing(false);
-    setActiveHistoryId(record.id);
-    setStep("done");
-  }, []);
-
-  const handleDeleteHistory = useCallback(async (id: string) => {
-    await supabase.from("transcriptions").delete().eq("id", id);
-    if (activeHistoryId === id) {
-      setStep("idle");
-      setTranscription("");
-      setTranslation("");
-      setAnalysis(null);
-      setActiveHistoryId(undefined);
-    }
-    fetchHistory();
-    toast({ title: "Deleted", description: "Transcription removed." });
-  }, [fetchHistory, toast, activeHistoryId]);
 
   const handleNewTranscription = useCallback(() => {
     setStep("idle");
@@ -261,113 +160,94 @@ const Index = () => {
     setFileName("");
     setAnalysis(null);
     setAnalyzing(false);
-    setActiveHistoryId(undefined);
     setErrorMessage("");
   }, []);
 
   const showResults = step === "done" && transcription;
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <HistorySidebar
-          records={history}
-          onSelect={handleSelectHistory}
-          onDelete={handleDeleteHistory}
-          onNewTranscription={handleNewTranscription}
-          activeId={activeHistoryId}
-        />
-
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex items-center justify-between px-4 py-3 sm:px-6 border-b border-border">
-            <SidebarTrigger />
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground hidden sm:inline">{user?.email}</span>
-              <ThemeToggle />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={async () => {
-                  await signOut();
-                  navigate("/");
-                }}
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Sign out</span>
-              </Button>
-            </div>
-          </div>
-
-          <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
-            {!showResults && (
-              <>
-                <header className="mb-10 text-center">
-                  <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                    Devowl Transcriptor
-                  </h1>
-                  <p className="mt-3 text-muted-foreground">
-                    Upload any audio file — get an accurate transcription, English translation, and AI-powered insights.
-                  </p>
-                </header>
-
-                <section className="mb-8">
-                  <Tabs defaultValue="upload" className="w-full">
-                    <TabsList className="grid w-full max-w-sm mx-auto grid-cols-2 mb-6">
-                      <TabsTrigger value="upload" className="gap-2">
-                        <UploadIcon className="h-4 w-4" /> Upload
-                      </TabsTrigger>
-                      <TabsTrigger value="record" className="gap-2">
-                        <Mic className="h-4 w-4" /> Record
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="upload">
-                      <AudioUploadZone
-                        onFileSelected={processAudio}
-                        isProcessing={step !== "idle" && step !== "done" && step !== "error"}
-                      />
-                    </TabsContent>
-                    <TabsContent value="record">
-                      <LiveRecorder
-                        onTranscriptComplete={processRecordedText}
-                        disabled={step !== "idle" && step !== "done" && step !== "error"}
-                      />
-                    </TabsContent>
-                  </Tabs>
-                </section>
-              </>
-            )}
-
-            {step !== "idle" && step !== "done" && (
-              <section className="mb-8">
-                <ProcessingStatus currentStep={step} errorMessage={errorMessage} />
-              </section>
-            )}
-
-            {showResults && (
-              <section className="space-y-6">
-                <ResultsPane
-                  transcription={transcription}
-                  translation={translation}
-                  isEnglish={isEnglish}
-                  detectedLanguage={detectedLanguage}
-                />
-                <AnalysisPane analysis={analysis} loading={analyzing} />
-              </section>
-            )}
-
-            {showResults && activeHistoryId && (
-              <AudioChat
-                transcriptionId={activeHistoryId}
-                transcription={transcription}
-                translation={translation}
-                analysis={analysis}
-                fileName={fileName}
-              />
-            )}
-          </main>
+    <div className="flex min-h-screen w-full flex-col">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
+        <Link to="/" className="text-sm font-semibold tracking-tight">
+          Devowl
+        </Link>
+        <div className="flex items-center gap-2">
+          {showResults && (
+            <Button variant="ghost" size="sm" onClick={handleNewTranscription}>
+              New transcription
+            </Button>
+          )}
+          <ThemeToggle />
         </div>
       </div>
-    </SidebarProvider>
+
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
+        {!showResults && (
+          <>
+            <header className="mb-10 text-center">
+              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Devowl Transcriptor
+              </h1>
+              <p className="mt-3 text-muted-foreground">
+                Upload any audio file — get an accurate transcription, English translation, and AI-powered insights.
+              </p>
+            </header>
+
+            <section className="mb-8">
+              <Tabs defaultValue="upload" className="w-full">
+                <TabsList className="mx-auto mb-6 grid w-full max-w-sm grid-cols-2">
+                  <TabsTrigger value="upload" className="gap-2">
+                    <UploadIcon className="h-4 w-4" /> Upload
+                  </TabsTrigger>
+                  <TabsTrigger value="record" className="gap-2">
+                    <Mic className="h-4 w-4" /> Record
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="upload">
+                  <AudioUploadZone
+                    onFileSelected={processAudio}
+                    isProcessing={step !== "idle" && step !== "done" && step !== "error"}
+                  />
+                </TabsContent>
+                <TabsContent value="record">
+                  <LiveRecorder
+                    onTranscriptComplete={processRecordedText}
+                    disabled={step !== "idle" && step !== "done" && step !== "error"}
+                  />
+                </TabsContent>
+              </Tabs>
+            </section>
+          </>
+        )}
+
+        {step !== "idle" && step !== "done" && (
+          <section className="mb-8">
+            <ProcessingStatus currentStep={step} errorMessage={errorMessage} />
+          </section>
+        )}
+
+        {showResults && (
+          <section className="space-y-6">
+            <ResultsPane
+              transcription={transcription}
+              translation={translation}
+              isEnglish={isEnglish}
+              detectedLanguage={detectedLanguage}
+            />
+            <AnalysisPane analysis={analysis} loading={analyzing} />
+          </section>
+        )}
+
+        {showResults && (
+          <AudioChat
+            transcription={transcription}
+            translation={translation}
+            analysis={analysis}
+            fileName={fileName}
+          />
+        )}
+      </main>
+    </div>
   );
 };
 

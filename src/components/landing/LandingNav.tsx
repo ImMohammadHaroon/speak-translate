@@ -4,7 +4,6 @@ import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useAuth } from "@/contexts/AuthContext";
 
 const links = [
   { href: "#how-it-works", label: "How it works" },
@@ -13,7 +12,6 @@ const links = [
 ];
 
 export function LandingNav() {
-  const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
 
   return (
@@ -38,25 +36,9 @@ export function LandingNav() {
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          {user ? (
-            <>
-              <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => signOut()}>
-                Sign out
-              </Button>
-              <Button asChild size="sm" className="active:scale-[0.98]">
-                <Link to="/app">Open app</Link>
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-                <Link to="/login">Log in</Link>
-              </Button>
-              <Button asChild size="sm" className="active:scale-[0.98]">
-                <Link to="/signup">Get started</Link>
-              </Button>
-            </>
-          )}
+          <Button asChild size="sm" className="active:scale-[0.98]">
+            <Link to="/app">Open app</Link>
+          </Button>
 
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -79,37 +61,11 @@ export function LandingNav() {
                     {link.label}
                   </a>
                 ))}
-                {user ? (
-                  <>
-                    <Button asChild className="mt-4">
-                      <Link to="/app" onClick={() => setOpen(false)}>
-                        Open app
-                      </Link>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setOpen(false);
-                        signOut();
-                      }}
-                    >
-                      Sign out
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button asChild variant="outline" className="mt-4">
-                      <Link to="/login" onClick={() => setOpen(false)}>
-                        Log in
-                      </Link>
-                    </Button>
-                    <Button asChild>
-                      <Link to="/signup" onClick={() => setOpen(false)}>
-                        Get started
-                      </Link>
-                    </Button>
-                  </>
-                )}
+                <Button asChild className="mt-4">
+                  <Link to="/app" onClick={() => setOpen(false)}>
+                    Open app
+                  </Link>
+                </Button>
               </div>
             </SheetContent>
           </Sheet>
